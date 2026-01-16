@@ -22,47 +22,54 @@ export default async function handler(req, res) {
   const sb = supabaseServer();
   const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-  // ✅ Minimal ABI needed for staking balance
+  // ✅ ABI confirmed from Arbiscan Read Contract
   const STAKING_ABI = [
-    "function balanceOf(address account) view returns (uint256)",
+    "function users(uint256,address) view returns (uint256 shares,uint256 lastDepositedTime,uint256 totalInvested,uint256 totalClaimed)",
     "function getPricePerFullShare() view returns (uint256)"
   ];
 
   const staking = new ethers.Contract(contractAddress, STAKING_ABI, provider);
 
-  // Your pools (UI lock terms)
-  const pools = [30, 60, 90, 180, 360];
+  // Load config from DB
+  const { data: cfgRow } = await sb.from("points_config").select("config").eq("id", 1).single();
+  const cfg = cfgRow?.config || {};
 
-  // Fetch share price once (same for all users)
+  const poolMap = cfg.staking_pool_id_map || {
+    "3": 30,
+    "4": 60,
+    "5": 90,
+    "6": 180,
+    "7": 360
+  };
+
+  const poolIds = Object.keys(poolMap).map((x) => Number(x));
+
+  // Price per full share
   const pricePerShareRaw = await staking.getPricePerFullShare();
-
-  // NOTE:
-  // Most vaults use 1e18 precision for pricePerShare
   const pricePerShare = Number(ethers.formatUnits(pricePerShareRaw, 18));
 
-  // Load all tracked users
+  // Track wallets known to the system
   const { data: users, error } = await sb.from("users").select("wallet");
   if (error) return res.status(500).json({ error: error.message });
 
   let updated = 0;
+  let walletsProcessed = 0;
 
   for (const u of users || []) {
-    // user shares
-    const sharesRaw = await staking.balanceOf(u.wallet);
+    walletsProcessed++;
 
-    // shares often are also 1e18 decimals
-    const shares = Number(ethers.formatUnits(sharesRaw, 18));
+    for (const poolId of poolIds) {
+      const lockTerm = poolMap[String(poolId)]; // 30/60/90/180/360
 
-    // ✅ estimated staked KIMA equivalent
-    const stakedKima = shares * pricePerShare;
+      const userData = await staking.users(poolId, u.wallet);
 
-    // Because your UI shows 5 pools but contract has ONE balanceOf(),
-    // we store the SAME balance across pools for now.
-    // Later: dev team can upgrade to per-pool staking when per-pool method is confirmed.
-    for (const poolId of pools) {
+      const shares = Number(ethers.formatUnits(userData.shares, 18));
+      const stakedKima = shares * pricePerShare;
+
+      // Store by lock-term pool_id in DB
       await sb.from("staking_balances").upsert({
         wallet: u.wallet,
-        pool_id: poolId,
+        pool_id: lockTerm,
         staked_amount: stakedKima,
         updated_at: new Date().toISOString()
       });
@@ -73,10 +80,10 @@ export default async function handler(req, res) {
 
   return res.json({
     ok: true,
-    usersTracked: users?.length || 0,
-    pricePerShare,
+    walletsProcessed,
     updated,
-    note:
-      "Using balanceOf(wallet) and getPricePerFullShare(). If contract supports per-pool balances, we can upgrade to store real per-pool values."
+    pricePerShare,
+    poolMap,
+    note: "Indexed real pool balances via users(poolId,wallet).shares"
   });
 }
