@@ -13,3 +13,4 @@ jobs:
         run: |
           curl -X POST "https://unibridge-points.vercel.app/api/jobs/poll-unibridge" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+#lets go
