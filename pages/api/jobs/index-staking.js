@@ -9,7 +9,7 @@ function requireCronSecret(req) {
 
 export default async function handler(req, res) {
   try {
-    // Allow POST + GET (for debugging)
+    // Allow POST + GET (debugging)
     if (req.method !== "POST" && req.method !== "GET") {
       return res.status(405).json({ error: "Method not allowed" });
     }
@@ -32,9 +32,9 @@ export default async function handler(req, res) {
     const sb = supabaseServer();
     const provider = new ethers.JsonRpcProvider(rpcUrl);
 
+    // ✅ Only use users(poolId, wallet)
     const STAKING_ABI = [
-      "function users(uint256,address) view returns (uint256 shares,uint256 lastDepositedTime,uint256 totalInvested,uint256 totalClaimed)",
-      "function getPricePerFullShare() view returns (uint256)"
+      "function users(uint256,address) view returns (uint256 shares,uint256 lastDepositedTime,uint256 totalInvested,uint256 totalClaimed)"
     ];
 
     const staking = new ethers.Contract(contractAddress, STAKING_ABI, provider);
@@ -61,26 +61,26 @@ export default async function handler(req, res) {
 
     const poolIds = Object.keys(poolMap).map((x) => Number(x));
 
-    // Get share price
-    const pricePerShareRaw = await staking.getPricePerFullShare();
-    const pricePerShare = Number(ethers.formatUnits(pricePerShareRaw, 18));
-
-    // Load wallets
+    // Load wallets to track
     const { data: users, error: userErr } = await sb.from("users").select("wallet");
     if (userErr) {
       return res.status(500).json({ error: "Failed to load users", details: userErr.message });
     }
 
     let updated = 0;
+    let walletsProcessed = 0;
 
     for (const u of users || []) {
+      walletsProcessed++;
+
       for (const poolId of poolIds) {
-        const lockTerm = poolMap[String(poolId)];
+        const lockTerm = poolMap[String(poolId)]; // 30/60/90/180/360
 
         const userData = await staking.users(poolId, u.wallet);
 
-        const shares = Number(ethers.formatUnits(userData.shares, 18));
-        const stakedKima = shares * pricePerShare;
+        // ✅ totalInvested is the real KIMA amount invested into that pool
+        // Most likely 18 decimals
+        const stakedKima = Number(ethers.formatUnits(userData.totalInvested, 18));
 
         const { error: upErr } = await sb.from("staking_balances").upsert({
           wallet: u.wallet,
@@ -104,10 +104,11 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
+      walletsProcessed,
       usersTracked: users?.length || 0,
       updated,
-      pricePerShare,
-      poolMap
+      poolMap,
+      note: "Indexed using users(poolId,wallet).totalInvested (no getPricePerFullShare)"
     });
   } catch (e) {
     return res.status(500).json({
