@@ -1,0 +1,15 @@
+name: Poll Unibridge TX Status
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call poll endpoint
+        run: |
+          curl -X POST "https://unibridge-points.vercel.app/api/jobs/poll-unibridge" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
