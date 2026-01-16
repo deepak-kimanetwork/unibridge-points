@@ -9,7 +9,9 @@ jobs:
   index:
     runs-on: ubuntu-latest
     steps:
-      - name: Call staking index endpoint
-        run: |
-          curl -X POST "https://unibridge-points.vercel.app/api/jobs/index-staking" \
-            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+     - name: Call staking index endpoint
+  run: |
+    curl -sS -X POST "https://unibridge-points.vercel.app/api/jobs/index-staking" \
+      -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+      -H "content-type: application/json"
+
