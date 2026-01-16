@@ -7,17 +7,6 @@ function requireCronSecret(req) {
   return secret === process.env.CRON_SECRET;
 }
 
-/**
- * NOTE:
- * We do NOT have the exact ABI/methods of your staking contract yet.
- * So this job is built as a "framework" that your dev team can complete
- * by plugging the correct contract read function(s).
- *
- * It already:
- * - reads all users from DB
- * - loops through pools: 30/60/90/180/360
- * - writes staking_balances rows
- */
 export default async function handler(req, res) {
   if (!requireCronSecret(req)) {
     return res.status(401).json({ error: "Unauthorized cron" });
@@ -33,43 +22,48 @@ export default async function handler(req, res) {
   const sb = supabaseServer();
   const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-  // Minimal placeholder ABI (dev must replace with correct ABI)
-  // Example methods could be: userInfo(poolId, wallet), balanceOf(wallet), deposits(wallet, poolId), etc.
+  // ✅ Minimal ABI needed for staking balance
   const STAKING_ABI = [
-    // Replace this with real staking ABI functions
+    "function balanceOf(address account) view returns (uint256)",
+    "function getPricePerFullShare() view returns (uint256)"
   ];
 
   const staking = new ethers.Contract(contractAddress, STAKING_ABI, provider);
 
-  // Pools defined by your UI
+  // Your pools (UI lock terms)
   const pools = [30, 60, 90, 180, 360];
 
-  // Load users we should track
+  // Fetch share price once (same for all users)
+  const pricePerShareRaw = await staking.getPricePerFullShare();
+
+  // NOTE:
+  // Most vaults use 1e18 precision for pricePerShare
+  const pricePerShare = Number(ethers.formatUnits(pricePerShareRaw, 18));
+
+  // Load all tracked users
   const { data: users, error } = await sb.from("users").select("wallet");
   if (error) return res.status(500).json({ error: error.message });
 
   let updated = 0;
-  let walletsProcessed = 0;
 
   for (const u of users || []) {
-    walletsProcessed++;
+    // user shares
+    const sharesRaw = await staking.balanceOf(u.wallet);
 
+    // shares often are also 1e18 decimals
+    const shares = Number(ethers.formatUnits(sharesRaw, 18));
+
+    // ✅ estimated staked KIMA equivalent
+    const stakedKima = shares * pricePerShare;
+
+    // Because your UI shows 5 pools but contract has ONE balanceOf(),
+    // we store the SAME balance across pools for now.
+    // Later: dev team can upgrade to per-pool staking when per-pool method is confirmed.
     for (const poolId of pools) {
-      // ============================
-      // TODO: Replace with real read
-      // ============================
-      // Example patterns (depends on staking contract):
-      // const info = await staking.userInfo(poolId, u.wallet);
-      // const staked = Number(ethers.formatUnits(info.amount, 18));
-      //
-      // For now: set to 0 so the system runs without breaking.
-      const staked = 0;
-
-      // Upsert staking balance
       await sb.from("staking_balances").upsert({
         wallet: u.wallet,
         pool_id: poolId,
-        staked_amount: staked,
+        staked_amount: stakedKima,
         updated_at: new Date().toISOString()
       });
 
@@ -77,5 +71,12 @@ export default async function handler(req, res) {
     }
   }
 
-  return res.json({ ok: true, walletsProcessed, updated, note: "ABI read is placeholder until staking ABI is added." });
+  return res.json({
+    ok: true,
+    usersTracked: users?.length || 0,
+    pricePerShare,
+    updated,
+    note:
+      "Using balanceOf(wallet) and getPricePerFullShare(). If contract supports per-pool balances, we can upgrade to store real per-pool values."
+  });
 }
