@@ -1,0 +1,15 @@
+name: Daily Staking Snapshot
+
+on:
+  schedule:
+    - cron: "10 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call staking endpoint
+        run: |
+          curl -X POST "https://unibridge-points.vercel.app/api/jobs/daily-staking" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
