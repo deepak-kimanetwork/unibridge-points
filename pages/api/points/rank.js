@@ -7,10 +7,10 @@ function shortWallet(w) {
 
 export default async function handler(req, res) {
   try {
-    const sb = supabaseServer();
+    const walletReq = String(req.query.wallet || "").toLowerCase();
+    if (!walletReq) return res.status(400).json({ error: "wallet required" });
 
-    const limit = Math.min(Number(req.query.limit || 50), 500);
-    const offset = Math.max(Number(req.query.offset || 0), 0);
+    const sb = supabaseServer();
 
     const { data: cfgRow } = await sb
       .from("points_config")
@@ -21,24 +21,16 @@ export default async function handler(req, res) {
     const cfg = cfgRow?.config;
     const weights = cfg?.weights || { unibridge: 0.6, staking: 0.4 };
 
-    const { data: wallets, error: walletsErr } = await sb
-      .from("users")
-      .select("wallet");
-
-    if (walletsErr) {
-      return res.status(500).json({ error: walletsErr.message });
-    }
+    const { data: wallets } = await sb.from("users").select("wallet");
 
     const rows = [];
     for (const u of wallets || []) {
       const wallet = (u.wallet || "").toLowerCase();
 
-      const { data: ledger, error: ledgerErr } = await sb
+      const { data: ledger } = await sb
         .from("points_ledger")
         .select("category, points")
         .eq("wallet", wallet);
-
-      if (ledgerErr) continue;
 
       let unibridgePoints = 0;
       let stakingPoints = 0;
@@ -64,20 +56,16 @@ export default async function handler(req, res) {
 
     rows.sort((a, b) => b.totalScore - a.totalScore);
 
-    // Assign ranks
-    const ranked = rows.map((r, idx) => ({
-      ...r,
-      rank: idx + 1,
-    }));
+    const idx = rows.findIndex((r) => r.wallet === walletReq);
 
-    const paged = ranked.slice(offset, offset + limit);
+    if (idx === -1) {
+      return res.json({ ok: true, found: false, wallet: walletReq });
+    }
 
     return res.json({
       ok: true,
-      rows: paged,
-      total: ranked.length,
-      limit,
-      offset,
+      found: true,
+      row: { ...rows[idx], rank: idx + 1 },
     });
   } catch (e) {
     return res.status(500).json({ error: e?.message || String(e) });
