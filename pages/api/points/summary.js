@@ -29,6 +29,8 @@ export default async function handler(req, res) {
     if (row.category === "UNIBRIDGE_TX") unibridgePoints += Number(row.points);
     if (row.category === "STAKING_DAILY") stakingPoints += Number(row.points);
     if (row.category === "CONNECT") unibridgePoints += Number(row.points); // connect counts as Unibridge bucket
+if (row.category === "REFERRAL_BONUS_REFERRED") unibridgePoints += Number(row.points);
+if (row.category === "REFERRAL_EARN_REFERRER") unibridgePoints += Number(row.points);
   }
 
   const totalScore =
