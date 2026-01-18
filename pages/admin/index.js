@@ -229,7 +229,7 @@ export default function AdminPanel() {
                   <label className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-white/30' : 'text-slate-400'}`}>Connect Reward</label>
                   <input type="number" value={connBonus} onChange={(e)=>setConnBonus(e.target.value)} className={`w-full p-4 border rounded-2xl font-mono text-sm focus:border-primary/50 outline-none transition-all ${isDarkMode ? 'bg-black/40 border-white/5 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} />
                 </div>
-                <button className="w-full bg-primary text-[#050505] py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:shadow-[0_0_25px_rgba(0,210,255,0.4)] transition-all active:scale-[0.98]">
+                <button className="w-full bg-primary text-[#f59e0b] py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:shadow-[0_0_25px_rgba(0,210,255,0.4)] transition-all active:scale-[0.98]">
                   Commit Logic Update
                 </button>
               </div>
@@ -252,7 +252,7 @@ export default function AdminPanel() {
                   placeholder="Paste wallet address (0x...)" 
                   className={`flex-1 border p-4 rounded-2xl outline-none focus:border-primary/50 transition-all font-mono ${isDarkMode ? 'bg-black/40 border-white/5 text-white placeholder:text-white/10' : 'bg-slate-50 border-slate-200 text-slate-900'}`} 
                 />
-                <button type="submit" className="bg-primary text-[#050505] px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:shadow-[0_0_20px_rgba(0,210,255,0.4)] transition-all active:scale-[0.98]">
+                <button type="submit" className="bg-primary text-[#f59e0b] px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:shadow-[0_0_20px_rgba(0,210,255,0.4)] transition-all active:scale-[0.98]">
                   {loading ? "..." : "Analyze"}
                 </button>
               </form>
