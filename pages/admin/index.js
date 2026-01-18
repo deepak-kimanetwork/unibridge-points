@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAccount } from 'wagmi';
 import { 
   Search, Save, User, Settings, ArrowLeft, ShieldAlert, Lock, 
-  Download, PlusCircle, Users, Eye, Database, Trophy, Copy, Check, Sun, Moon 
+  Download, PlusCircle, Users, Eye, Database, Trophy, Copy, Check, Sun, Moon, Clock 
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from 'next/router';
@@ -21,6 +21,7 @@ export default function AdminPanel() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [lastSync, setLastSync] = useState(null); // ✅ State for sync timestamp
 
   // Manual Adjustment States
   const [adjustAmount, setAdjustAmount] = useState("");
@@ -62,6 +63,33 @@ export default function AdminPanel() {
       if (!walletToSearch) setSearchQuery(target);
     } catch (err) {
       alert("Search failed: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ Force Sync Logic with Timestamp Update
+  const handleForceSync = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/jobs/verify-transactions", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || '12345'}` 
+        },
+      });
+      
+      if (res.ok) {
+        const now = new Date();
+        setLastSync(now.toLocaleString()); // ✅ Set the current date/time
+        alert("Sync Successful: Transactions Verified!");
+        if (userData) handleSearch(userData.profile?.wallet);
+      } else {
+        const err = await res.json();
+        alert("Sync Failed: " + (err.error || "Check CRON_SECRET"));
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -128,21 +156,36 @@ export default function AdminPanel() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            {/* Dark Mode Toggle */}
-            <button 
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className={`p-3 rounded-xl border transition-all ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-white border-slate-200 shadow-sm hover:bg-slate-50'}`}
-            >
-              {isDarkMode ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
-            </button>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <button 
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                className={`p-3 rounded-xl border transition-all ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-white border-slate-200 shadow-sm hover:bg-slate-50'}`}
+              >
+                {isDarkMode ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
+              </button>
 
-            <button onClick={handleExport} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-primary/10 text-primary border border-primary/20 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-primary hover:text-black transition-all">
-              <Download className="w-4 h-4" /> Export CSV
-            </button>
-            <Link href="/points" className={`flex-1 md:flex-none text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border px-6 py-3 rounded-2xl transition-all ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-              <ArrowLeft className="w-4 h-4" /> Exit
-            </Link>
+              <button 
+                onClick={handleForceSync}
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-amber-500 hover:text-black transition-all"
+              >
+                <Database className="w-4 h-4" /> {loading ? "..." : "Force Sync"}
+              </button>
+
+              <button onClick={handleExport} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-primary/10 text-primary border border-primary/20 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-primary hover:text-black transition-all">
+                <Download className="w-4 h-4" /> Export CSV
+              </button>
+              <Link href="/points" className={`flex-1 md:flex-none text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border px-6 py-3 rounded-2xl transition-all ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                <ArrowLeft className="w-4 h-4" /> Exit
+              </Link>
+            </div>
+            {/* ✅ Sync Timestamp Display */}
+            {lastSync && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/5 rounded-lg border border-amber-500/10 animate-in fade-in zoom-in duration-300">
+                <Clock className="w-3 h-3 text-amber-500/50" />
+                <span className="text-[9px] font-bold uppercase tracking-tighter text-amber-500/70">Last Sync: {lastSync}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -150,8 +193,6 @@ export default function AdminPanel() {
           
           {/* LEFT COLUMN: LIST & CONFIG */}
           <div className="lg:col-span-4 space-y-8">
-            
-            {/* USER BROWSER LIST */}
             <section className={`border rounded-[2rem] p-6 backdrop-blur-md shadow-2xl ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
               <h2 className="text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2 text-primary">
                 <Users className="w-4 h-4" /> User Database
@@ -175,7 +216,6 @@ export default function AdminPanel() {
               </div>
             </section>
 
-            {/* GLOBAL CONFIG */}
             <section className={`border rounded-[2rem] p-6 backdrop-blur-md shadow-2xl ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
               <h2 className="text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2 text-primary">
                 <Settings className="w-4 h-4" /> Global Control
@@ -189,7 +229,6 @@ export default function AdminPanel() {
                   <label className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-white/30' : 'text-slate-400'}`}>Connect Reward</label>
                   <input type="number" value={connBonus} onChange={(e)=>setConnBonus(e.target.value)} className={`w-full p-4 border rounded-2xl font-mono text-sm focus:border-primary/50 outline-none transition-all ${isDarkMode ? 'bg-black/40 border-white/5 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} />
                 </div>
-                {/* Fixed Visibility Button */}
                 <button className="w-full bg-primary text-[#050505] py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:shadow-[0_0_25px_rgba(0,210,255,0.4)] transition-all active:scale-[0.98]">
                   Commit Logic Update
                 </button>
@@ -213,7 +252,6 @@ export default function AdminPanel() {
                   placeholder="Paste wallet address (0x...)" 
                   className={`flex-1 border p-4 rounded-2xl outline-none focus:border-primary/50 transition-all font-mono ${isDarkMode ? 'bg-black/40 border-white/5 text-white placeholder:text-white/10' : 'bg-slate-50 border-slate-200 text-slate-900'}`} 
                 />
-                {/* Fixed Visibility Button */}
                 <button type="submit" className="bg-primary text-[#050505] px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:shadow-[0_0_20px_rgba(0,210,255,0.4)] transition-all active:scale-[0.98]">
                   {loading ? "..." : "Analyze"}
                 </button>
@@ -221,8 +259,6 @@ export default function AdminPanel() {
 
               {userData ? (
                 <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  
-                  {/* ✅ FULL WALLET ADDRESS DISPLAY SECTION */}
                   <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
                     <div className="flex items-center gap-3 overflow-hidden">
                       <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0" />
@@ -256,7 +292,6 @@ export default function AdminPanel() {
                     </div>
                   </div>
 
-                  {/* Manual Adjustment */}
                   <div className={`p-8 rounded-[2rem] border border-dashed ${isDarkMode ? 'bg-white/[0.01] border-white/10' : 'bg-slate-50 border-slate-200'}`}>
                     <h3 className="text-[10px] font-black uppercase tracking-widest mb-6 flex items-center gap-2 text-red-500/80">
                       <PlusCircle className="w-3 h-3"/> Override Logic
@@ -270,7 +305,6 @@ export default function AdminPanel() {
                     </div>
                   </div>
 
-                  {/* Audit Log Table */}
                   <div className="space-y-4">
                     <p className={`text-[10px] font-black uppercase tracking-[0.3em] ${isDarkMode ? 'text-white/20' : 'text-slate-400'}`}>Ledger Event Log</p>
                     <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
@@ -302,7 +336,6 @@ export default function AdminPanel() {
             </section>
           </div>
         </div>
-
       </div>
 
       <style jsx global>{`
