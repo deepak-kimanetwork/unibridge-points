@@ -1,15 +1,16 @@
 import "@/styles/globals.css";
-import { Outfit } from "next/font/google";
+import { WagmiProvider } from 'wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { wagmiAdapter } from '@/lib/web3-config';
 
-const outfit = Outfit({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
+const queryClient = new QueryClient();
 
 export default function App({ Component, pageProps }) {
   return (
-    <main className={outfit.className}>
-      <Component {...pageProps} />
-    </main>
+    <WagmiProvider config={wagmiAdapter.wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <Component {...pageProps} />
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 }

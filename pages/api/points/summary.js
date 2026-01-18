@@ -1,22 +1,20 @@
 import { supabaseServer } from "../../../lib/supabaseServer";
 
-function shortWallet(w) {
-  if (!w) return "";
-  return `${w.slice(0, 6)}…${w.slice(-4)}`;
-}
-
 export default async function handler(req, res) {
-  const wallet = req.query.wallet;
+  const wallet = req.query.wallet?.toLowerCase();
   if (!wallet) return res.status(400).json({ error: "wallet required" });
 
   const sb = supabaseServer();
 
-  const { data: cfgRow } = await sb.from("points_config").select("config").eq("id", 1).single();
-  const cfg = cfgRow?.config;
+  // 1. Get the pre-calculated rank and score from the view we created
+  // This is much faster than manual calculation in the API
+  const { data: rankData, error: rankError } = await sb
+    .from('leaderboard_view')
+    .select('*')
+    .eq('wallet', wallet)
+    .single();
 
-  const weights = cfg?.weights || { unibridge: 0.6, staking: 0.4 };
-
-  // sum ledger by category groups
+  // 2. Get the specific ledger totals
   const { data: ledger } = await sb
     .from("points_ledger")
     .select("category, points")
@@ -26,47 +24,21 @@ export default async function handler(req, res) {
   let stakingPoints = 0;
 
   for (const row of ledger || []) {
-    if (row.category === "UNIBRIDGE_TX") unibridgePoints += Number(row.points);
-    if (row.category === "STAKING_DAILY") stakingPoints += Number(row.points);
-    if (row.category === "CONNECT") unibridgePoints += Number(row.points); // connect counts as Unibridge bucket
-if (row.category === "REFERRAL_BONUS_REFERRED") unibridgePoints += Number(row.points);
-if (row.category === "REFERRAL_EARN_REFERRER") unibridgePoints += Number(row.points);
-  }
-
-  const totalScore =
-    unibridgePoints * Number(weights.unibridge ?? 0.6) +
-    stakingPoints * Number(weights.staking ?? 0.4);
-
-  // rank: compute naive rank based on total score (MVP)
-  const { data: allWallets } = await sb.from("users").select("wallet");
-  let rank = "-";
-  if (allWallets?.length) {
-    const scores = [];
-    for (const u of allWallets) {
-      const { data: uLedger } = await sb
-        .from("points_ledger")
-        .select("category, points")
-        .eq("wallet", u.wallet);
-
-      let uU = 0, uS = 0;
-      for (const r of uLedger || []) {
-        if (r.category === "UNIBRIDGE_TX") uU += Number(r.points);
-        if (r.category === "STAKING_DAILY") uS += Number(r.points);
-        if (r.category === "CONNECT") uU += Number(r.points);
-      }
-      const t = uU * (weights.unibridge ?? 0.6) + uS * (weights.staking ?? 0.4);
-      scores.push({ wallet: u.wallet, totalScore: t });
+    if (row.category === "UNIBRIDGE_TX" || row.category === "CONNECT") {
+        unibridgePoints += Number(row.points);
     }
-    scores.sort((a, b) => b.totalScore - a.totalScore);
-    rank = scores.findIndex((s) => s.wallet === wallet) + 1;
+    if (row.category === "STAKING_DAILY") {
+        stakingPoints += Number(row.points);
+    }
   }
 
-  return res.json({
+  // 3. Return the data in a clean format
+  // We use the rankData from our database view for the most accurate results
+  return res.status(200).json({
     wallet,
-    walletShort: shortWallet(wallet),
     unibridgePoints: Math.floor(unibridgePoints),
     stakingPoints: Math.floor(stakingPoints),
-    totalScore: Math.floor(totalScore),
-    rank
+    totalScore: Math.floor(rankData?.total_score || (unibridgePoints * 0.6 + stakingPoints * 0.4)),
+    rank: rankData?.rank || "--"
   });
 }

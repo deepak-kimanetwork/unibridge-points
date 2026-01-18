@@ -1,0 +1,35 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 841" width="1024" height="841">
+	<defs>
+		<linearGradient id="g1" x2="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(0,-746.891,671.673,0,544.826,803.022)">
+			<stop offset=".4" stop-color="#05d97f" stop-opacity="0"/>
+			<stop offset="1" stop-color="#80e1bd" stop-opacity="1"/>
+		</linearGradient>
+		<linearGradient id="g2" x2="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(0,387.913,-121.193,0,390.921,235.62)">
+			<stop offset="0" stop-color="#05c494"/>
+			<stop offset=".8" stop-color="#1e1f4a"/>
+		</linearGradient>
+		<linearGradient id="g3" x2="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(0,387.913,-121.193,0,698.732,235.62)">
+			<stop offset="0" stop-color="#05c494"/>
+			<stop offset=".8" stop-color="#1e1f4a"/>
+		</linearGradient>
+		<linearGradient id="g4" x2="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(0,-567.402,671.524,0,544.826,803.01)">
+			<stop offset=".13" stop-color="#434bc8"/>
+			<stop offset="1" stop-color="#3be89e"/>
+		</linearGradient>
+	</defs>
+	<style>
+		.s0 { opacity: .5;fill: url(#g1) } 
+		.s1 { fill: url(#g2) } 
+		.s2 { fill: url(#g3) } 
+		.s3 { fill: url(#g4) } 
+		.s4 { fill: #63ffbe } 
+	</style>
+	<g id="Folder 1">
+		<path class="s0" d="m209.04 235.64v334.04c0 33.27 17.8 64.1 46.64 80.74l242.5 140.08c28.84 16.64 64.43 16.64 93.39 0l242.49-140.08c28.85-16.64 46.64-47.47 46.64-80.74v-334.04l-289.13-167.07c-28.96-16.64-64.55-16.64-93.39 0z"/>
+		<path class="s1" d="m330.35 305.68v212.8c0 21.64 11.51 41.66 30.24 52.48l90.95 52.58v-387.9z"/>
+		<path class="s2" d="m759.4 305.68l-121.19-70.04v387.9l90.95-52.58c18.72-10.82 30.24-30.84 30.24-52.48z"/>
+		<path class="s3" d="m759.4 305.68v204.66c0 21.64-11.63 41.65-30.36 52.59l-153.87 88.89c-18.72 10.82-41.87 10.82-60.71 0l-153.87-88.89c-18.73-10.94-30.36-30.83-30.36-52.59v-204.66l-121.19-70.04v334.04c0 33.27 17.8 64.1 46.64 80.74l242.5 140.08c28.84 16.76 64.43 16.76 93.27 0l242.5-140.08c28.84-16.64 46.64-47.47 46.64-80.74v-334.04z"/>
+		<path class="s4" d="m330.35 165.6l-121.31 70.04 121.31 70.04 121.19-70.04z"/>
+		<path class="s4" d="m759.4 165.6l-121.31 70.04 121.31 70.04 121.19-70.04z"/>
+	</g>
+</svg>

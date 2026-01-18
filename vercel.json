@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/jobs/daily-staking",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/jobs/verify-transactions",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}

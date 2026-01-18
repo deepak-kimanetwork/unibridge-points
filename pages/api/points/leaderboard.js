@@ -1,85 +1,49 @@
 import { supabaseServer } from "../../../lib/supabaseServer";
 
 function shortWallet(w) {
-  if (!w) return "";
   return `${w.slice(0, 6)}…${w.slice(-4)}`;
 }
 
 export default async function handler(req, res) {
-  try {
-    const sb = supabaseServer();
+  const limit = Number(req.query.limit || 50);
+  const sb = supabaseServer();
 
-    const limit = Math.min(Number(req.query.limit || 50), 500);
-    const offset = Math.max(Number(req.query.offset || 0), 0);
+  const { data: cfgRow } = await sb.from("points_config").select("config").eq("id", 1).single();
+  const cfg = cfgRow?.config;
+  const weights = cfg?.weights || { unibridge: 0.6, staking: 0.4 };
 
-    const { data: cfgRow } = await sb
-      .from("points_config")
-      .select("config")
-      .eq("id", 1)
-      .single();
+  const { data: wallets } = await sb.from("users").select("wallet");
 
-    const cfg = cfgRow?.config;
-    const weights = cfg?.weights || { unibridge: 0.6, staking: 0.4 };
+  const rows = [];
+  for (const u of wallets || []) {
+    const { data: ledger } = await sb
+      .from("points_ledger")
+      .select("category, points")
+      .eq("wallet", u.wallet);
 
-    const { data: wallets, error: walletsErr } = await sb
-      .from("users")
-      .select("wallet");
+    let unibridgePoints = 0;
+    let stakingPoints = 0;
 
-    if (walletsErr) {
-      return res.status(500).json({ error: walletsErr.message });
+    for (const row of ledger || []) {
+      if (row.category === "UNIBRIDGE_TX") unibridgePoints += Number(row.points);
+      if (row.category === "STAKING_DAILY") stakingPoints += Number(row.points);
+      if (row.category === "CONNECT") unibridgePoints += Number(row.points);
     }
 
-    const rows = [];
-    for (const u of wallets || []) {
-      const wallet = (u.wallet || "").toLowerCase();
+    const totalScore =
+      unibridgePoints * (weights.unibridge ?? 0.6) +
+      stakingPoints * (weights.staking ?? 0.4);
 
-      const { data: ledger, error: ledgerErr } = await sb
-        .from("points_ledger")
-        .select("category, points")
-        .eq("wallet", wallet);
-
-      if (ledgerErr) continue;
-
-      let unibridgePoints = 0;
-      let stakingPoints = 0;
-
-      for (const row of ledger || []) {
-        if (row.category === "UNIBRIDGE_TX") unibridgePoints += Number(row.points);
-        if (row.category === "STAKING_DAILY") stakingPoints += Number(row.points);
-        if (row.category === "CONNECT") unibridgePoints += Number(row.points);
-      }
-
-      const totalScore =
-        unibridgePoints * (weights.unibridge ?? 0.6) +
-        stakingPoints * (weights.staking ?? 0.4);
-
-      rows.push({
-        wallet,
-        walletShort: shortWallet(wallet),
-        unibridgePoints: Math.floor(unibridgePoints),
-        stakingPoints: Math.floor(stakingPoints),
-        totalScore: Math.floor(totalScore),
-      });
-    }
-
-    rows.sort((a, b) => b.totalScore - a.totalScore);
-
-    // Assign ranks
-    const ranked = rows.map((r, idx) => ({
-      ...r,
-      rank: idx + 1,
-    }));
-
-    const paged = ranked.slice(offset, offset + limit);
-
-    return res.json({
-      ok: true,
-      rows: paged,
-      total: ranked.length,
-      limit,
-      offset,
+    rows.push({
+      wallet: u.wallet,
+      walletShort: shortWallet(u.wallet),
+      unibridgePoints: Math.floor(unibridgePoints),
+      stakingPoints: Math.floor(stakingPoints),
+      totalScore: Math.floor(totalScore)
     });
-  } catch (e) {
-    return res.status(500).json({ error: e?.message || String(e) });
   }
+
+  rows.sort((a, b) => b.totalScore - a.totalScore);
+
+  return res.json({ rows: rows.slice(0, limit) });
 }

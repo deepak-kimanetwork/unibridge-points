@@ -1,250 +1,144 @@
-import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import {
-  Trophy,
-  ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
-  BarChart3,
-} from "lucide-react";
-
+import { useEffect, useState } from "react";
+import { useAccount } from 'wagmi';
 import { Header } from "@/components/points/Header";
-import { Leaderboard as LeaderboardTable } from "@/components/points/Leaderboard";
-import { StatCard } from "@/components/points/StatCard";
+import { Trophy, Medal, Star } from "lucide-react";
+import { motion } from "framer-motion";
 
-const PAGE_SIZE = 50;
 const shortWallet = (w) => (w ? `${w.slice(0, 6)}…${w.slice(-4)}` : "");
 
 export default function LeaderboardPage() {
-  const [wallet, setWallet] = useState("");
-  const [rows, setRows] = useState([]);
+  const { address, isConnected } = useAccount();
+  const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // pagination state
-  const [page, setPage] = useState(0);
-  const [total, setTotal] = useState(0);
-
-  // your rank row
-  const [myRow, setMyRow] = useState(null);
-
-  async function connect() {
-    if (!window.ethereum) {
-      alert("MetaMask not detected");
-      return;
-    }
-
-    const accounts = await window.ethereum.request({
-      method: "eth_requestAccounts",
-    });
-
-    const w = accounts?.[0];
-    if (!w) return;
-
-    setWallet(w);
-
-    // optional: register connect bonus
-    await fetch("/api/points/connect", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet: w }),
-    });
-  }
-
-  async function loadLeaderboard(p = page) {
-    setLoading(true);
-    try {
-      const offset = p * PAGE_SIZE;
-
-      const res = await fetch(
-        `/api/points/leaderboard?limit=${PAGE_SIZE}&offset=${offset}`
-      );
-      const json = await res.json();
-
-      setRows(json?.rows || []);
-      setTotal(json?.total || 0);
-    } catch (e) {
-      setRows([]);
-      setTotal(0);
-    }
-    setLoading(false);
-  }
-
-  async function loadMyRank(w) {
-    if (!w) return;
-    try {
-      const res = await fetch(`/api/points/rank?wallet=${w}`);
-      const json = await res.json();
-      setMyRow(json?.found ? json.row : null);
-    } catch (e) {
-      setMyRow(null);
-    }
-  }
+  const [userRankData, setUserRankData] = useState(null);
 
   useEffect(() => {
-    loadLeaderboard(0);
+    async function fetchData() {
+      try {
+        const res = await fetch("/api/points/leaderboard");
+        const json = await res.json();
+        
+        // Environment safe check
+        const leaderboardData = Array.isArray(json) ? json : (json.rows || []);
+        
+        const formattedData = leaderboardData.map((item, index) => ({
+          ...item,
+          rank: item.rank || index + 1,
+          total_score: Number(item.totalScore || item.total_score || 0)
+        }));
+
+        setLeaderboard(formattedData);
+      } catch (err) {
+        console.error("Failed to load leaderboard", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
   }, []);
 
   useEffect(() => {
-    loadLeaderboard(page);
-  }, [page]);
-
-  useEffect(() => {
-    if (wallet) loadMyRank(wallet);
-  }, [wallet]);
-
-  const pageCount = useMemo(() => {
-    return total ? Math.ceil(total / PAGE_SIZE) : 1;
-  }, [total]);
+    if (isConnected && address && leaderboard.length > 0) {
+      const found = leaderboard.find(u => u.wallet?.toLowerCase() === address.toLowerCase());
+      setUserRankData(found);
+    } else {
+      setUserRankData(null);
+    }
+  }, [isConnected, address, leaderboard]);
 
   return (
-    <div className="min-h-screen bg-background unibridge-bg relative">
-      {/* gradients */}
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent dark:hidden" />
-        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-indigo-500/10 to-transparent hidden dark:block" />
-      </div>
-
-      <Header isConnected={!!wallet} wallet={wallet} onConnect={connect} />
-
-      <main className="max-w-6xl mx-auto px-4 py-10 space-y-6">
-        {/* top actions */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <a
-            href="/points"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary border border-border hover:bg-secondary/80"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
-          </a>
-
-          <button
-            onClick={() => {
-              loadLeaderboard(page);
-              if (wallet) loadMyRank(wallet);
-            }}
-            className="unibridge-btn px-5 py-2.5 text-sm"
-          >
-            Refresh
-          </button>
+    <div className="min-h-screen bg-[#050505] text-white relative">
+      <Header />
+      
+      <main className="max-w-4xl mx-auto px-4 py-12 relative z-10">
+        <div className="text-center mb-10">
+          <div className="inline-flex p-3 rounded-2xl bg-primary/10 mb-4 border border-primary/20">
+            <Trophy className="w-8 h-8 text-primary" />
+          </div>
+          <h1 className="text-4xl font-black tracking-tight">Global Leaderboard</h1>
+          <p className="text-muted-foreground mt-2">Unique rankings based on points and activity time.</p>
         </div>
 
-        {/* ✅ Sticky Your Rank Card */}
-        <div className="sticky top-[88px] z-20">
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
+        {/* ✅ DYNAMIC PERSONAL RANK CARD */}
+        {isConnected && address && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }} 
             animate={{ opacity: 1, y: 0 }}
-            className="unibridge-card unibridge-glow p-4 border border-border bg-card/70 backdrop-blur-md"
+            className="mb-8 p-6 rounded-2xl bg-primary/5 border border-primary/20 flex items-center justify-between shadow-2xl backdrop-blur-md"
           >
-            {!wallet ? (
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                  <div className="font-semibold flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-primary" />
-                    Your Rank
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Connect your wallet to view your rank.
-                  </div>
-                </div>
-
-                <button onClick={connect} className="unibridge-btn px-4 py-2 text-sm">
-                  Connect
-                </button>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground shadow-lg">
+                <Star className="w-6 h-6 fill-current" />
               </div>
-            ) : !myRow ? (
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                  <div className="font-semibold flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-primary" />
-                    Your Rank
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Not ranked yet. Earn points to appear on leaderboard.
-                  </div>
-                </div>
-
-                <div className="text-sm text-muted-foreground">
-                  Wallet: {shortWallet(wallet)}
-                </div>
+              <div>
+                <p className="text-[10px] text-primary font-bold uppercase tracking-widest">Your Standing</p>
+                <p className="text-lg font-mono font-bold">{shortWallet(address)}</p>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <StatCard
-                  title="Your Rank"
-                  value={`#${myRow.rank}`}
-                  icon={Trophy}
-                  variant="primary"
-                />
-                <StatCard
-                  title="Final Score"
-                  value={myRow.totalScore}
-                  icon={Trophy}
-                  variant="primary"
-                />
-                <StatCard
-                  title="Unibridge / Staking"
-                  value={`${myRow.unibridgePoints} / ${myRow.stakingPoints}`}
-                  icon={BarChart3}
-                  subtitle="Score split"
-                />
-              </div>
-            )}
-          </motion.div>
-        </div>
-
-        {/* main leaderboard card */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="unibridge-card unibridge-glow p-6"
-        >
-          <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
-                <Trophy className="w-7 h-7 text-primary" />
-                Leaderboard
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Ranked by Final Score (Weighted)
+            </div>
+            <div className="text-right">
+              <p className="text-4xl font-black text-primary">
+                {userRankData ? `#${userRankData.rank}` : "#--"}
+              </p>
+              <p className="text-xs font-bold text-muted-foreground uppercase">
+                Score: {userRankData ? userRankData.total_score.toLocaleString() : "0"}
               </p>
             </div>
+          </motion.div>
+        )}
 
-            <div className="text-sm text-muted-foreground">
-              {loading ? "Loading..." : `${total} wallets`}
-            </div>
-          </div>
-
+        <div className="unibridge-card overflow-hidden border border-white/5 shadow-2xl bg-white/5 rounded-3xl backdrop-blur-sm">
           {loading ? (
-            <div className="text-muted-foreground">Fetching leaderboard...</div>
+            <div className="p-20 text-center text-muted-foreground animate-pulse">Calculating unique rankings...</div>
           ) : (
-            <LeaderboardTable entries={rows} currentWallet={wallet} />
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-white/5 border-b border-white/5 text-[10px] uppercase tracking-widest text-muted-foreground">
+                    <th className="px-6 py-5 font-bold">Rank</th>
+                    <th className="px-6 py-5 font-bold">Wallet</th>
+                    <th className="px-6 py-5 font-bold text-right">Final Score</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {leaderboard.length > 0 ? leaderboard.map((user) => {
+                    const isMe = isConnected && address && user.wallet?.toLowerCase() === address.toLowerCase();
+                    return (
+                      <tr key={user.wallet} className={`hover:bg-white/5 transition-colors ${isMe ? 'bg-primary/10' : ''}`}>
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-2">
+                            {user.rank === 1 && <Medal className="w-5 h-5 text-yellow-500" />}
+                            {user.rank === 2 && <Medal className="w-5 h-5 text-slate-300" />}
+                            {user.rank === 3 && <Medal className="w-5 h-5 text-amber-600" />}
+                            <span className={`font-mono font-bold ${user.rank <= 3 ? 'text-lg text-primary' : 'text-sm text-slate-400'}`}>
+                              #{user.rank}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5 font-mono text-sm">
+                          <span className={isMe ? "text-primary font-bold" : "text-slate-200"}>
+                            {shortWallet(user.wallet)}
+                          </span>
+                          {isMe && (
+                            <span className="ml-2 text-[10px] bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter">You</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-5 text-right font-black text-primary">
+                          {user.total_score.toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  }) : (
+                    <tr>
+                      <td colSpan="3" className="px-6 py-20 text-center text-muted-foreground">
+                        No ranking data available.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           )}
-
-          {/* ✅ Pagination */}
-          <div className="flex items-center justify-between mt-6 gap-3 flex-wrap">
-            <div className="text-sm text-muted-foreground">
-              Page {page + 1} of {pageCount}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                disabled={page === 0}
-                onClick={() => setPage((p) => Math.max(p - 1, 0))}
-                className="px-3 py-2 rounded-lg bg-secondary border border-border hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              <button
-                disabled={page + 1 >= pageCount}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-2 rounded-lg bg-secondary border border-border hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </motion.div>
+        </div>
       </main>
     </div>
   );
